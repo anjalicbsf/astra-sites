@@ -294,6 +294,10 @@ class Astra_WXR_Importer {
 
 		$data = $this->get_data( $path );
 
+		if ( is_wp_error( $data ) ) {
+			return $data;
+		}
+
 		return array(
 			'count'   => array(
 				'posts'    => $data->post_count,
