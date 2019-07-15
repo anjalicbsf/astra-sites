@@ -21,15 +21,19 @@
 
 		_track: function( data, type ) {
 
+			data['url'] = AstraSitesAdmin.templateData.astra_demo_url;
+			data['demo_id'] = AstraSitesAdmin.templateData.id;
+			data['type'] = type;
+
 			let post_data = {
-				type: type,
-				url: AstraSitesAdmin.templateData.astra_demo_url,
-				id: AstraSitesAdmin.templateData.id,
+				action: 'push_to_ga',
 				params: data
 			}
 
+			console.log(post_data);
+
 			$.ajax({
-				url  : trackingData.url,
+				url  : trackingData.ajax_url,
 				type : 'POST',
 				data : post_data
 			})

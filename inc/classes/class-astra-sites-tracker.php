@@ -58,7 +58,7 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue' ) );
 
 			// AJAX.
-			add_action( 'wp_ajax_astra-view-count', array( $this, 'view_count' ) );
+			add_action( 'wp_ajax_push_to_ga', array( $this, 'push' ) );
 			add_action( 'wp_ajax_astra-download-count', array( $this, 'download_count' ) );
 		}
 
@@ -67,7 +67,7 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 		 *
 		 * @since  x.x.x
 		 */
-		public function view_count() {
+		public function push() {
 
 			if ( ! current_user_can( 'manage_options' ) ) {
 				wp_send_json_error( 'You can\'t access this action.' );
@@ -75,29 +75,17 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 
 			// Control Logic goes here.
 
-			wp_send_json_success(
-				array(
-					'view_count' => true,
-				)
+			$response = wp_remote_post(
+				self::get_api_url(),
+				[
+					'body'     => $_POST['params'],
+					'blocking' => false,
+				]
 			);
-		}
-
-		/**
-		 * Send Download Count to the Server.
-		 *
-		 * @since  x.x.x
-		 */
-		public function download_count() {
-
-			if ( ! current_user_can( 'manage_options' ) ) {
-				wp_send_json_error( 'You can\'t access this action.' );
-			}
-
-			// Control Logic goes here.
 
 			wp_send_json_success(
 				array(
-					'download_count' => true,
+					'response' => wp_remote_retrieve_body( $response ),
 				)
 			);
 		}
@@ -109,7 +97,7 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 		 */
 		public static function set_api_url() {
 
-			self::$api_url = apply_filters( 'astra_sites_tracking_api_url', 'http://analytics.sharkz.in/wp-json/analytics/v2/track' );
+			self::$api_url = apply_filters( 'astra_sites_tracking_api_url', 'https://www.google-analytics.com/collect' );
 
 		}
 
@@ -135,8 +123,9 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 			$params = self::get_tracking_data();
 
 			$tracking_data = array(
-				'params' => $params,
-				'url'    => self::get_api_url(),
+				'params'   => $params,
+				'url'      => self::get_api_url(),
+				'ajax_url' => esc_url( admin_url( 'admin-ajax.php' ) )
 			);
 
 			wp_enqueue_script( 'astra-sites-tracking', ASTRA_SITES_URI . 'inc/assets/js/tracking.js', array( 'jquery' ), ASTRA_SITES_VER, 'all' );
@@ -150,31 +139,61 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 		 * @return array
 		 */
 		private static function get_tracking_data() {
-			$data = array();
+
+			$data = array(
+				'tid' => 'UA-29853075-4', // "Client ID" for "WP-CLI Usage"
+				'cid' => self::gen_uuid(), // "User ID"
+				't'   => 'screenview',
+				'v'   => 1, // API v1
+				'aip' => 1, // Anon user IP
+				'ck' => true, // Campaign Keyword,
+			);
 
 			// General site info.
-			$data['url']   = home_url();
-			$data['email'] = apply_filters( 'astra_sites_tracker_admin_email', get_option( 'admin_email' ) );
-			$data['theme'] = self::get_theme_info();
+			$data['av']   = home_url();
+			$data['cc'] = apply_filters( 'astra_sites_tracker_admin_email', get_option( 'admin_email' ) );
+			$data['an'] = self::get_theme_info();
 
 			// WordPress Info.
-			$data['wp'] = self::get_wordpress_info();
+			$data['cd'] = self::get_wordpress_info();
 
 			// Server Info.
-			$data['server'] = self::get_server_info();
+			$data['cs'] = self::get_server_info();
 
 			// Plugin info.
 			$all_plugins              = self::get_all_plugins();
-			$data['active_plugins']   = $all_plugins['active_plugins'];
-			$data['inactive_plugins'] = $all_plugins['inactive_plugins'];
+			$data['dr']['active_plugins']   = $all_plugins['active_plugins'];
+			$data['dr']['inactive_plugins'] = $all_plugins['inactive_plugins'];
 
 			// Get all WooCommerce options info.
-			$data['settings'] = array(
+			$data['cm'] = array(
 				'astra-sites-settings'  => get_option( 'astra_sites_settings' ),
 				'astra-sites-favorites' => get_option( 'astra-sites-favorites' ),
 			);
 
 			return apply_filters( 'astra_sites_tracker_data', $data );
+		}
+
+		public static function gen_uuid() {
+			return sprintf(
+				'%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+				// 32 bits for "time_low"
+				mt_rand( 0, 0xffff ),
+				mt_rand( 0, 0xffff ),
+				// 16 bits for "time_mid"
+				mt_rand( 0, 0xffff ),
+				// 16 bits for "time_hi_and_version",
+				// four most significant bits holds version number 4
+				mt_rand( 0, 0x0fff ) | 0x4000,
+				// 16 bits, 8 bits for "clk_seq_hi_res",
+				// 8 bits for "clk_seq_low",
+				// two most significant bits holds zero and one for variant DCE1.1
+				mt_rand( 0, 0x3fff ) | 0x8000,
+				// 48 bits for "node"
+				mt_rand( 0, 0xffff ),
+				mt_rand( 0, 0xffff ),
+				mt_rand( 0, 0xffff )
+			);
 		}
 
 		/**
