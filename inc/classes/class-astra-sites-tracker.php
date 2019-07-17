@@ -77,10 +77,9 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 
 			$response = wp_remote_post(
 				self::get_api_url(),
-				[
-					'body'     => $_POST['params'],
-					'blocking' => false,
-				]
+				array(
+					'body' => $_POST['params'],
+				)
 			);
 
 			wp_send_json_success(
@@ -125,7 +124,7 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 			$tracking_data = array(
 				'params'   => $params,
 				'url'      => self::get_api_url(),
-				'ajax_url' => esc_url( admin_url( 'admin-ajax.php' ) )
+				'ajax_url' => esc_url( admin_url( 'admin-ajax.php' ) ),
 			);
 
 			wp_enqueue_script( 'astra-sites-tracking', ASTRA_SITES_URI . 'inc/assets/js/tracking.js', array( 'jquery' ), ASTRA_SITES_VER, 'all' );
@@ -141,39 +140,70 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 		private static function get_tracking_data() {
 
 			$data = array(
-				'tid' => 'UA-29853075-4', // "Client ID" for "WP-CLI Usage"
-				'cid' => self::gen_uuid(), // "User ID"
+				'tid' => 'UA-29853075-4', // "Client ID" for "WP-CLI Usage".
+				'cid' => self::gen_uuid(), // "User ID".
 				't'   => 'screenview',
-				'v'   => 1, // API v1
-				'aip' => 1, // Anon user IP
-				'ck' => true, // Campaign Keyword,
+				'v'   => 1, // API v1.
+				'aip' => 1, // Anon user IP.
+				'cm'  => 'Astra Sites',
 			);
 
-			// General site info.
-			$data['av']   = home_url();
+			// Home URL -> dh -> "Document Host".
+			$data['dh'] = home_url();
+
+			// Admin Email -> cc -> "Campaign Content".
 			$data['cc'] = apply_filters( 'astra_sites_tracker_admin_email', get_option( 'admin_email' ) );
-			$data['an'] = self::get_theme_info();
 
-			// WordPress Info.
-			$data['cd'] = self::get_wordpress_info();
+			// WordPress.
+				// Version -> fl -> "Flash Version".
+				$data['fl'] = get_bloginfo( 'version' );
+				// User Locale -> ul -> "User Language".
+				$data['ul'] = get_locale();
+				// Multisite -> je -> "Java Enabled".
+				$data['je'] = is_multisite();
+				// Debug Mode -> de -> "Document Encoding".
+				$data['de'] = ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? true : false;
+				// Memory Limit -> sr -> "Screen Resolution".
+				$memory     = self::get_memory_info();
+				$data['sr'] = size_format( $memory );
 
-			// Server Info.
-			$data['cs'] = self::get_server_info();
+			// @codingStandardsIgnoreStart
 
-			// Plugin info.
-			$all_plugins              = self::get_all_plugins();
-			$data['dr']['active_plugins']   = $all_plugins['active_plugins'];
-			$data['dr']['inactive_plugins'] = $all_plugins['inactive_plugins'];
+			// Theme.
+				$theme_data = wp_get_theme();
+				// Name -> an -> "Application Name".
+				$data['an'] = $theme_data->Name;
+				// Version -> aid -> "Application ID".
+				$data['aid'] = $theme_data->Version;
 
-			// Get all WooCommerce options info.
-			$data['cm'] = array(
-				'astra-sites-settings'  => get_option( 'astra_sites_settings' ),
-				'astra-sites-favorites' => get_option( 'astra-sites-favorites' ),
-			);
+			// @codingStandardsIgnoreEnd
 
-			return apply_filters( 'astra_sites_tracker_data', $data );
+			// Plugin.
+				$all_plugins                     = self::get_all_plugins();
+				$data_plugin['active_plugins']   = $all_plugins['active_plugins'];
+				$data_plugin['inactive_plugins'] = $all_plugins['inactive_plugins'];
+				// Plugin info -> cd -> "Screen Name".
+				// $data['cd'] = json_encode( $data_plugin );.
+
+			// Astra Site Data.
+				$astra_site_data = array(
+					'astra-sites-settings'  => get_option( 'astra_sites_settings' ),
+					'astra-sites-favorites' => get_option( 'astra-sites-favorites' ),
+				);
+				// Plugin info -> dp -> "Document Location URL".
+				$data['dl'] = json_encode( $astra_site_data );
+
+				// Astra Site Version -> av -> "Application Version".
+				$data['av'] = ASTRA_SITES_VER;
+
+				return apply_filters( 'astra_sites_tracker_data', $data );
 		}
 
+		/**
+		 * Get User ID.
+		 *
+		 * @return string
+		 */
 		public static function gen_uuid() {
 			return sprintf(
 				'%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
@@ -201,26 +231,7 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 		 *
 		 * @return array
 		 */
-		public static function get_theme_info() {
-			$theme_data        = wp_get_theme();
-			$theme_child_theme = self::astra_bool_to_string( is_child_theme() );
-			$theme_wc_support  = self::astra_bool_to_string( current_theme_supports( 'woocommerce' ) );
-
-			return array(
-				'name'        => $theme_data->Name, // @phpcs:ignore
-				'version'     => $theme_data->Version, // @phpcs:ignore
-				'child_theme' => $theme_child_theme,
-				'wc_support'  => $theme_wc_support,
-			);
-		}
-
-		/**
-		 * Get WordPress related data.
-		 *
-		 * @return array
-		 */
-		private static function get_wordpress_info() {
-			$wp_data = array();
+		public static function get_memory_info() {
 
 			$memory = self::astra_let_to_num( WP_MEMORY_LIMIT );
 
@@ -231,13 +242,7 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 				$memory = max( $memory, $system_memory );
 			}
 
-			$wp_data['memory_limit'] = size_format( $memory );
-			$wp_data['debug_mode']   = ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'Yes' : 'No';
-			$wp_data['locale']       = get_locale();
-			$wp_data['version']      = get_bloginfo( 'version' );
-			$wp_data['multisite']    = is_multisite() ? 'Yes' : 'No';
-
-			return $wp_data;
+			return $memory;
 		}
 
 		/**

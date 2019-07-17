@@ -21,9 +21,14 @@
 
 		_track: function( data, type ) {
 
-			data['url'] = AstraSitesAdmin.templateData.astra_demo_url;
-			data['demo_id'] = AstraSitesAdmin.templateData.id;
-			data['type'] = type;
+			// Demo URL - 'dp' => "Document Path"
+			data['dp'] = AstraSitesAdmin.templateData.astra_demo_url;
+
+			// Type - 'cs'  => "Campaign Source"
+			data['cs'] = type;
+
+			// Demo ID - 'ci' => "Campaign ID"
+			data['ci'] = AstraSitesAdmin.templateData.id;
 
 			let post_data = {
 				action: 'push_to_ga',
