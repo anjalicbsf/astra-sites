@@ -21,14 +21,14 @@
 
 		_track: function( data, type ) {
 
-			// Demo URL - 'dp' => "Document Path"
-			data['dp'] = AstraSitesAdmin.templateData.astra_demo_url;
+			// Demo URL - 'dp' => "Document Path" -> ga:dcmClickSite
+			// data['pr1nm'] = AstraSitesAdmin.templateData.astra_demo_url;
 
-			// Type - 'cs'  => "Campaign Source"
-			data['cs'] = type;
+			// Type => "Document Title" => ga:pageTitle
+			data['dt'] = type;
 
-			// Demo ID - 'ci' => "Campaign ID"
-			data['ci'] = AstraSitesAdmin.templateData.id;
+			// Demo ID - 'ti' => "Transaction ID" -> ga:transactionId
+			data['ti'] = AstraSitesAdmin.templateData.id;
 
 			let post_data = {
 				action: 'push_to_ga',

@@ -59,7 +59,6 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 
 			// AJAX.
 			add_action( 'wp_ajax_push_to_ga', array( $this, 'push' ) );
-			add_action( 'wp_ajax_astra-download-count', array( $this, 'download_count' ) );
 		}
 
 		/**
@@ -142,27 +141,30 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 			$data = array(
 				'tid' => 'UA-29853075-4', // "Client ID" for "WP-CLI Usage".
 				'cid' => self::gen_uuid(), // "User ID".
-				't'   => 'screenview',
+				't'   => 'pageview',
 				'v'   => 1, // API v1.
 				'aip' => 1, // Anon user IP.
-				'cm'  => 'Astra Sites',
+				'an'  => 'Astra Sites', // "Plugin Name" => "Application name" => ga:appName
 			);
 
-			// Home URL -> dh -> "Document Host".
-			$data['dh'] = home_url();
+			// 'sr'  => ini_get( 'memory_limit' ), // "Memory Limit" => Screen Resolution => ga:screenResolution
+			// 'cc'  => phpversion(), // "PHP Version" => "Campaign Content" => ga:adContent
+
+			// Domain => Document Host => ga:hostname.
+			$data['dh'] = site_url();
 
 			// Admin Email -> cc -> "Campaign Content".
 			$data['cc'] = apply_filters( 'astra_sites_tracker_admin_email', get_option( 'admin_email' ) );
 
 			// WordPress.
-				// Version -> fl -> "Flash Version".
-				$data['fl'] = get_bloginfo( 'version' );
-				// User Locale -> ul -> "User Language".
+				// Version -> cd -> "Campaign Name".
+				$data['cd'] = get_bloginfo( 'version' );
+				// User Locale -> ul -> "User Language" -> ga:language.
 				$data['ul'] = get_locale();
-				// Multisite -> je -> "Java Enabled".
+				// Multisite -> je -> "Java Enabled" -> ga:javaEnabled.
 				$data['je'] = is_multisite();
-				// Debug Mode -> de -> "Document Encoding".
-				$data['de'] = ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? true : false;
+				// Debug Mode -> ck -> "Campaign Keyword" -> ga:keyword.
+				$data['ck'] = ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? true : false;
 				// Memory Limit -> sr -> "Screen Resolution".
 				$memory     = self::get_memory_info();
 				$data['sr'] = size_format( $memory );
@@ -170,30 +172,33 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 			// @codingStandardsIgnoreStart
 
 			// Theme.
-				$theme_data = wp_get_theme();
-				// Name -> an -> "Application Name".
-				$data['an'] = $theme_data->Name;
-				// Version -> aid -> "Application ID".
-				$data['aid'] = $theme_data->Version;
+				// "Parent Theme" => Document Path" => ga:pagePath
+				$data['dp'] = get_template();
+				// "Child Theme" => "Campaign Medium" => ga:medium
+				$data['cm'] = get_stylesheet();
+				// Viewport size => ga:browserSize
+				$data['vp'] = self::get_curl_version( 'version' );
+				// "SSL Version" => Screen Colors => ga:screenColors
+				$data['sd'] = self::get_curl_version( 'ssl_version' );
+				// "Server Software" => Flash Version => ga:flashVersion
+				$data['fl'] = ( isset( $_SERVER['SERVER_SOFTWARE'] ) && ! empty( $_SERVER['SERVER_SOFTWARE'] ) ) ? $_SERVER['SERVER_SOFTWARE'] : 'Not Available';
 
 			// @codingStandardsIgnoreEnd
 
 			// Plugin.
-				$all_plugins                     = self::get_all_plugins();
-				$data_plugin['active_plugins']   = $all_plugins['active_plugins'];
-				$data_plugin['inactive_plugins'] = $all_plugins['inactive_plugins'];
+				$all_plugins = self::get_all_plugins();
 				// Plugin info -> cd -> "Screen Name".
-				// $data['cd'] = json_encode( $data_plugin );.
+				$data['cd'] = json_encode( $all_plugins['active_plugins'] );
 
 			// Astra Site Data.
 				$astra_site_data = array(
 					'astra-sites-settings'  => get_option( 'astra_sites_settings' ),
 					'astra-sites-favorites' => get_option( 'astra-sites-favorites' ),
 				);
-				// Plugin info -> dp -> "Document Location URL".
+				// Plugin info -> dl -> "Document Location URL".
 				$data['dl'] = json_encode( $astra_site_data );
 
-				// Astra Site Version -> av -> "Application Version".
+				// Astra Site Version -> Application Version" => ga:appVersion.
 				$data['av'] = ASTRA_SITES_VER;
 
 				return apply_filters( 'astra_sites_tracker_data', $data );
@@ -227,6 +232,23 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 		}
 
 		/**
+		 * Get CURL version.
+		 *
+		 * @param  string $key CURL version key.
+		 * @return string
+		 */
+		public static function get_curl_version( $key ) {
+			if ( function_exists( 'curl_version' ) ) {
+				$curl = curl_version();
+
+				return $curl[ $key ];
+				return sprintf( '%s %s', $curl['version'], $curl['ssl_version'] );
+			} else {
+				return 'Not Available';
+			}
+		}
+
+		/**
 		 * Get the current theme info, theme name and version.
 		 *
 		 * @return array
@@ -243,42 +265,6 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 			}
 
 			return $memory;
-		}
-
-		/**
-		 * Get server related info.
-		 *
-		 * @return array
-		 */
-		private static function get_server_info() {
-			$server_data = array();
-
-			if ( ! empty( $_SERVER['SERVER_SOFTWARE'] ) ) {
-				$server_data['software'] = $_SERVER['SERVER_SOFTWARE']; // @phpcs:ignore
-			}
-
-			if ( function_exists( 'phpversion' ) ) {
-				$server_data['php_version'] = phpversion();
-			}
-			// @codingStandardsIgnoreStart
-			if ( function_exists( 'ini_get' ) ) {
-				$server_data['php_post_max_size']  = size_format( self::astra_let_to_num( @ini_get( 'post_max_size' ) ) );
-				$server_data['php_time_limt']      = @ini_get( 'max_execution_time' );
-				$server_data['php_max_input_vars'] = @ini_get( 'max_input_vars' );
-				$server_data['php_suhosin']        = extension_loaded( 'suhosin' ) ? 'Yes' : 'No';
-			}
-			// @codingStandardsIgnoreEnd
-
-			$database_version             = self::ast_get_server_database_version();
-			$server_data['mysql_version'] = $database_version['number'];
-
-			$server_data['php_max_upload_size']  = size_format( wp_max_upload_size() );
-			$server_data['php_default_timezone'] = date_default_timezone_get();
-			$server_data['php_soap']             = class_exists( 'SoapClient' ) ? 'Yes' : 'No';
-			$server_data['php_fsockopen']        = function_exists( 'fsockopen' ) ? 'Yes' : 'No';
-			$server_data['php_curl']             = function_exists( 'curl_init' ) ? 'Yes' : 'No';
-
-			return $server_data;
 		}
 
 		/**
@@ -326,47 +312,6 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 				'active_plugins'   => $active_plugins,
 				'inactive_plugins' => $plugins,
 			);
-		}
-
-		/**
-		 * Retrieves the MySQL server version. Based on $wpdb.
-		 *
-		 * @since x.x.x
-		 * @return array Vesion information.
-		 */
-		public static function ast_get_server_database_version() {
-			global $wpdb;
-
-			if ( empty( $wpdb->is_mysql ) ) {
-				return array(
-					'string' => '',
-					'number' => '',
-				);
-			}
-
-			if ( $wpdb->use_mysqli ) {
-				$server_info = mysqli_get_server_info( $wpdb->dbh ); // @codingStandardsIgnoreLine.
-			} else {
-				$server_info = mysql_get_server_info( $wpdb->dbh ); // @codingStandardsIgnoreLine.
-			}
-
-			return array(
-				'string' => $server_info,
-				'number' => preg_replace( '/([^\d.]+).*/', '', $server_info ),
-			);
-		}
-		/**
-		 * Converts a bool to a 'yes' or 'no'.
-		 *
-		 * @since x.x.x
-		 * @param bool $bool String to convert.
-		 * @return string
-		 */
-		public static function astra_bool_to_string( $bool ) {
-			if ( ! is_bool( $bool ) ) {
-				$bool = is_bool( $bool ) ? $bool : ( 'yes' === $bool || 1 === $bool || 'true' === $bool || '1' === $bool );
-			}
-			return true === $bool ? 'yes' : 'no';
 		}
 
 		/**
