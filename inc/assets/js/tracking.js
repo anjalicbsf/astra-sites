@@ -27,8 +27,8 @@
 			// Type => "Document Title" => ga:pageTitle
 			data['dt'] = type;
 
-			// Demo ID - 'ti' => "Transaction ID" -> ga:transactionId
-			data['ti'] = AstraSitesAdmin.templateData.id;
+			// Demo ID - 'aid' => "Application ID" -> ga:appId
+			data['aid'] = AstraSitesAdmin.templateData.id;
 
 			let post_data = {
 				action: 'push_to_ga',

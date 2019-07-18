@@ -144,7 +144,7 @@ if ( ! class_exists( 'Astra_Sites_Tracker' ) ) :
 				't'   => 'pageview',
 				'v'   => 1, // API v1.
 				'aip' => 1, // Anon user IP.
-				'an'  => 'Astra Sites', // "Plugin Name" => "Application name" => ga:appName
+				'an'  => 'astra-sites', // "Plugin Name" => "Application name" => ga:appName
 			);
 
 			// 'sr'  => ini_get( 'memory_limit' ), // "Memory Limit" => Screen Resolution => ga:screenResolution
